@@ -1,5 +1,7 @@
 import _ from 'lodash';
 import * as StellarSdk from 'stellar-sdk';
+import WalletConnect from '@walletconnect/client';
+import QRCodeModal from '@walletconnect/qrcode-modal';
 import Transport from '@ledgerhq/hw-transport-u2f';
 import AppStellar from '@ledgerhq/hw-app-str';
 import TrezorConnect from 'trezor-connect';
@@ -22,11 +24,12 @@ export default function Send(driver) {
 
         this.setupLedgerError = null; // Could connect but couldn't reach address
         this.ledgerConnected = false;
+        this.connector = null;
 
         this.unfundedAccountId = '';
         this.inflationDone = false;
         this.account = null; // MagicSpoon.Account instance
-        this.authType = ''; // '', 'secret', 'ledger', 'pubkey', 'trezor', 'freighter'
+        this.authType = ''; // '', 'secret', 'ledger', 'pubkey', 'trezor', 'freighter', 'lobstr'
         this.jwtToken = null;
         this.userFederation = '';
         this.promisesForMyltipleLoading = {};
@@ -131,6 +134,49 @@ export default function Send(driver) {
             const keypair = StellarSdk.Keypair.fromPublicKey(accountId);
             return this.handlers.logIn(keypair, {
                 authType: 'pubkey',
+            });
+        },
+        loginWithLobstr: async () => {
+            this.connector = new WalletConnect({
+                bridge: 'https://bridge.walletconnect.org',
+                qrcodeModal: QRCodeModal,
+            });
+
+            // Check if connection is already established
+            if (!this.connector.connected) {
+                // create new session
+                this.connector.createSession();
+            }
+
+            // Subscribe to connection events
+            this.connector.on('connect', (error, payload) => {
+                if (error) {
+                    throw error;
+                }
+
+                // Get provided accounts and chainId
+                const { accounts, chainId } = payload.params[0];
+
+                console.log('connect', accounts);
+            });
+
+            this.connector.on('session_update', (error, payload) => {
+                if (error) {
+                    throw error;
+                }
+
+                // Get updated accounts and chainId
+                const { accounts, chainId } = payload.params[0];
+
+                console.log('session_update', accounts);
+            });
+
+            this.connector.on('disconnect', (error, payload) => {
+                if (error) {
+                    throw error;
+                }
+
+                // Delete connector
             });
         },
         logInWithFreighter: async () => {
@@ -265,6 +311,8 @@ export default function Send(driver) {
                     status: 'finish',
                     signedTx: tx,
                 };
+            } else if (this.authType === 'lobstr') {
+                this.connector.sendCustomRequest({ tx }).then(() => ({ status: 'await_signers' }));
             } else if (this.authType === 'ledger') {
                 console.log(tx);
                 return driver.modal.handlers.activate('signWithLedger', tx).then(async (modalResult) => {
