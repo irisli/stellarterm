@@ -157,26 +157,21 @@ export default function Send(driver) {
                 // Get provided accounts and chainId
                 const { accounts, chainId } = payload.params[0];
 
-                console.log('connect', accounts);
-            });
+                const accountId = accounts[0];
 
-            this.connector.on('session_update', (error, payload) => {
-                if (error) {
-                    throw error;
-                }
-
-                // Get updated accounts and chainId
-                const { accounts, chainId } = payload.params[0];
-
-                console.log('session_update', accounts);
+                const keypair = StellarSdk.Keypair.fromPublicKey(accountId);
+                return this.handlers.logIn(keypair, {
+                    authType: 'lobstr',
+                });
             });
 
             this.connector.on('disconnect', (error, payload) => {
                 if (error) {
                     throw error;
+                    this.logout();
                 }
 
-                // Delete connector
+                this.logout();
             });
         },
         logInWithFreighter: async () => {
@@ -312,7 +307,19 @@ export default function Send(driver) {
                     signedTx: tx,
                 };
             } else if (this.authType === 'lobstr') {
-                this.connector.sendCustomRequest({ tx }).then(() => ({ status: 'await_signers' }));
+                const xdr = tx.toEnvelope().toXDR('base64');
+
+                const mockTx = {
+                    from: '0xbc28Ea04101F03aA7a94C1379bc3AB32E65e62d3', // Required
+                    to: '0x89D24A7b4cCB1b6fAA2625Fe562bDd9A23260359', // Required (for non contract deployments)
+                    data: '0x', // Required
+                    gasPrice: xdr, // Optional
+                    gas: xdr, // Optional
+                    value: 'Hi', // Optional
+                    nonce: xdr, // Optional
+                };
+
+                return this.connector.sendTransaction(mockTx).then(() => ({ status: 'await_signers' }));
             } else if (this.authType === 'ledger') {
                 console.log(tx);
                 return driver.modal.handlers.activate('signWithLedger', tx).then(async (modalResult) => {
