@@ -2,6 +2,7 @@ import _ from 'lodash';
 import * as StellarSdk from 'stellar-sdk';
 import WalletConnect from '@walletconnect/client';
 import QRCodeModal from '@walletconnect/qrcode-modal';
+import * as Utils from '@walletconnect/utils';
 import Transport from '@ledgerhq/hw-transport-u2f';
 import AppStellar from '@ledgerhq/hw-app-str';
 import TrezorConnect from 'trezor-connect';
@@ -309,17 +310,12 @@ export default function Send(driver) {
             } else if (this.authType === 'lobstr') {
                 const xdr = tx.toEnvelope().toXDR('base64');
 
-                const mockTx = {
-                    from: '0xbc28Ea04101F03aA7a94C1379bc3AB32E65e62d3', // Required
-                    to: '0x89D24A7b4cCB1b6fAA2625Fe562bDd9A23260359', // Required (for non contract deployments)
-                    data: '0x', // Required
-                    gasPrice: xdr, // Optional
-                    gas: xdr, // Optional
-                    value: 'Hi', // Optional
-                    nonce: xdr, // Optional
-                };
+                const msg = [
+                    Utils.convertUtf8ToHex(xdr),
+                    '0xbc28ea04101f03ea7a94c1379bc3ab32e65e62d3',
+                ];
 
-                return this.connector.sendTransaction(mockTx).then(() => ({ status: 'await_signers' }));
+                return this.connector.signPersonalMessage(msg).then(() => ({ status: 'await_signers' }));
             } else if (this.authType === 'ledger') {
                 console.log(tx);
                 return driver.modal.handlers.activate('signWithLedger', tx).then(async (modalResult) => {
