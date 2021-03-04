@@ -319,6 +319,8 @@ export default function Send(driver) {
 
                 this.connector.signPersonalMessage(msg);
 
+                this.account.incrementSequenceNumber();
+
                 return driver.modal.handlers.activate('multisig', {
                     title: 'LOBSTR App',
                     logo: 'lobstr-logo',
